@@ -27,6 +27,25 @@ Software is simple and requires no external libraries as it's supposed to run
 on open routers (tested on OpenWRT router using USB camera microphone). I had
 problems with Python ALSA libraries due to lack of C compiler. 
 
-Running software takes ~ 3.2% for arecord and 4-6% for detection, comparing to
-20% for motion detection using camera (motion). I enable/disable it using
-external flask-based web interface and some scripts.
+Running the software takes ~ 3.2% CPU for arecord and 4-6% for detection,
+comparing to 20% for motion detection using camera (motion). I enable/disable
+it using external flask-based web interface and some scripts.
+
+
+Output example:
+Recording raw data 'stdin' : Unsigned 8 bit, Rate 8000 Hz, Mono
+2014-03-06 20:53:39,460 Limit reached 1/3 (amp=39, bg=0.88, noiselevel=44.38)  # Too short sound #1
+2014-03-06 20:53:39,581 Limit reached 2/3 (amp=7, bg=0.90, noiselevel=7.81)
+2014-03-06 20:53:43,574 Limit reached 1/3 (amp=6, bg=0.60, noiselevel=10.08)   # Too short 2, filtered
+
+2014-03-06 20:53:46,003 Limit reached 1/3 (amp=5, bg=0.56, noiselevel=8.95)    # Long enough - detected
+2014-03-06 20:53:46,132 Limit reached 2/3 (amp=11, bg=0.66, noiselevel=16.55)
+2014-03-06 20:53:46,259 Limit reached 3/3 (amp=10, bg=0.73, noiselevel=13.62)
+2014-03-06 20:53:46,264 Noise detected 1/4 - not yet notification              # No notification though - yet.
+
+
+2014-03-06 20:53:50,889 Limit reached 1/3 (amp=6, bg=0.72, noiselevel=8.28)    # Another one.
+2014-03-06 20:53:51,017 Limit reached 2/3 (amp=10, bg=0.82, noiselevel=12.18)
+2014-03-06 20:53:51,144 Limit reached 3/3 (amp=14, bg=0.95, noiselevel=14.74)
+2014-03-06 20:53:51,148 Noise detected 2/4 - not yet notification
+

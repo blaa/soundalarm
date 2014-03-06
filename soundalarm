@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# vim:ft=python tabstop=4 expandtab smarttab smartindent shiftwidth=4
+
+# (C) 2014 by Tomasz bla Fortuna
+# License: MIT
 
 import os
 import sys
@@ -6,11 +11,15 @@ import subprocess as sp
 import logging
 from time import time
 
-# This script is executed.
+# This script is executed when presence is detected.
 notify_script = 'notify.sh'
 
-FORMAT = '%(asctime)-15s %(message)s'
-logging.basicConfig(level=logging.INFO, format=FORMAT)
+# This is arecord command which should output mic data as unsigned char. 
+# You'll have to alter it if you have more than one data source.
+arecord_cmd = ['arecord', '-t', 'raw', '-f', 'U8', '-r', '8000']
+
+_FORMAT = '%(asctime)-15s %(message)s'
+logging.basicConfig(level=logging.INFO, format=_FORMAT)
 log = logging.getLogger(__name__)
 
 
@@ -74,13 +83,16 @@ class Detector(object):
     filter_gap = 12
 
     def __init__(self, notify):
-        self.proc = sp.Popen(['arecord', '-t', 'raw', '-f', 'U8', '-r', '8000'], stdout=sp.PIPE)
+        self.proc = sp.Popen(arecord_cmd, stdout=sp.PIPE)
         self.notify = notify
 
     def read_data(self, samples=1024):
         "Read audio data from arecord"
         data = self.proc.stdout.read(samples)
         data_int = [(ord(ch)-128) for ch in data]
+        if not data:
+            log.error('Unable to read input. Alter arecord parameters')
+            sys.exit(1) 
         return data_int
 
     def get_stats(self, samples):
@@ -103,10 +115,12 @@ class Detector(object):
         samples = self.read_data(samples=self.initial_samples)
         samples_abs, amplitude_avg, amplitude_max = self.get_stats(samples)
 
-        bg_noise = amplitude_avg * 1.02
+        bg_noise = amplitude_avg * 1.2
 
         detections = 0
         gap = 0
+
+        log.info('Entering sound detection loop')
         while True:
             samples = self.read_data(self.samples)
             samples_abs, amplitude_avg, amplitude_max = self.get_stats(samples)
