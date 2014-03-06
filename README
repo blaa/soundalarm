@@ -1,0 +1,32 @@
+Execute event when a presence is detected:
+- someone breaks the window
+- enters the room
+- talks.
+
+Input is filtered to prevent too frequent notifications. Filtering is
+configurable using few switches:
+
+    # Number of detections and period of time for detections to matter.
+    filter_detections = 4
+    filter_time = 6 * 60
+
+    # Gap between notifications
+    filter_gap = 10 * 60
+
+
+    # How many times the amplitude must exceed the background to trigger detection
+    filter_level = 7.
+    # Number of consecutive detections
+    filter_detections = 3
+
+    # After detecting give up for so many sample packs.
+    filter_gap = 12
+
+
+Software is simple and requires no external libraries as it's supposed to run
+on open routers (tested on OpenWRT router using USB camera microphone). I had
+problems with Python ALSA libraries due to lack of C compiler. 
+
+Running software takes ~ 3.2% for arecord and 4-6% for detection, comparing to
+20% for motion detection using camera (motion). I enable/disable it using
+external flask-based web interface and some scripts.

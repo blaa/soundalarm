@@ -1,0 +1,145 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import subprocess as sp
+import logging
+from time import time
+
+# This script is executed.
+notify_script = 'notify.sh'
+
+FORMAT = '%(asctime)-15s %(message)s'
+logging.basicConfig(level=logging.INFO, format=FORMAT)
+log = logging.getLogger(__name__)
+
+
+class Notification(object):
+    "Handle notifications when it's really required"
+
+    # Number of detections and period of time for detections to matter.
+    filter_detections = 4
+    filter_time = 6 * 60
+
+    # Gap between notifications
+    filter_gap = 10 * 60
+
+    def __init__(self):
+        # Recent noise detections.
+        self.detections = []
+
+        # Timestamp of last notification
+        self.last_notification = None
+
+    def register_detection(self):
+        "Filter out old detections and register a new one"
+        now = time()
+        self.detections = [det for det in self.detections if now - det < self.filter_time]
+        self.detections.append(now)
+
+    def noise_detected(self):
+        "Noise detected - register event and send notification if requested."
+        now = time()
+        self.register_detection()
+        if self.last_notification is not None and now - self.last_notification < self.filter_gap:
+            # Previous warning was recently
+            log.info("Ignoring noise - recently notification sent")
+            return
+
+        if len(self.detections) >= self.filter_detections:
+            self.notify()
+        else:
+            log.info('Noise detected %d/%d - not yet notification',
+                     len(self.detections), self.filter_detections)
+
+    def notify(self):
+        "Sends notifications, hook stuff here if needed"
+        log.warn('EVENT - Sending notification.')
+        self.last_notification = time()
+        os.system(notify_script + ' &')
+
+
+class Detector(object):
+    "Reads audio data, filters and detects noises and calls notifications"
+
+    initial_samples = 4096
+    samples = 1024
+
+    # How many times the amplitude must exceed the background to trigger detection
+    filter_level = 7.
+    # Number of consecutive detections
+    filter_detections = 3
+
+    # After detecting give up for so many sample packs.
+    filter_gap = 12
+
+    def __init__(self, notify):
+        self.proc = sp.Popen(['arecord', '-t', 'raw', '-f', 'U8', '-r', '8000'], stdout=sp.PIPE)
+        self.notify = notify
+
+    def read_data(self, samples=1024):
+        "Read audio data from arecord"
+        data = self.proc.stdout.read(samples)
+        data_int = [(ord(ch)-128) for ch in data]
+        return data_int
+
+    def get_stats(self, samples):
+        "Get basic stats for given samples"
+        cnt = len(samples)
+        samples_abs = [abs(s) for s in samples]
+        amplitude_total = sum(samples_abs)
+        amplitude_avg = float(amplitude_total) / cnt
+        amplitude_max = max(samples_abs)
+
+        return (samples_abs, amplitude_avg, amplitude_max)
+
+    def trigger(self):
+        self.notify.noise_detected()
+
+    def loop(self):
+        "Noise detection loop"
+
+        # Init stats
+        samples = self.read_data(samples=self.initial_samples)
+        samples_abs, amplitude_avg, amplitude_max = self.get_stats(samples)
+
+        bg_noise = amplitude_avg * 1.02
+
+        detections = 0
+        gap = 0
+        while True:
+            samples = self.read_data(self.samples)
+            samples_abs, amplitude_avg, amplitude_max = self.get_stats(samples)
+
+            bg_noise *= 20.0
+            bg_noise += amplitude_avg
+            bg_noise /= 21.0
+
+            if gap:
+                # Ignore detections for a while
+                gap -= 1
+                log.debug("GAP - nahnahnah i'm not listening")
+                continue
+
+            # Is there a detection?
+            if amplitude_max > bg_noise * self.filter_level:
+                detections += 1
+                log.info("Limit reached %d/%d (amp=%d, bg=%.2f, noiselevel=%.2f)",
+                         detections, self.filter_detections, amplitude_max, bg_noise, amplitude_max/bg_noise)
+                if detections >= self.filter_detections:
+                    self.trigger()
+                    gap = self.filter_gap
+            else:
+                detections = 0
+
+            log.debug("BG=%6.2f AMP_AVG=%6.2f AMP_MAX=%5.2f", bg_noise, amplitude_avg, amplitude_max)
+
+
+if __name__ == "__main__":
+    try:
+        notification = Notification()
+        detector = Detector(notification)
+        detector.loop()
+    except KeyboardInterrupt:
+        print "Keyboard interrupt"
+        sys.exit(0)
